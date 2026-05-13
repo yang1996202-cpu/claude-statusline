@@ -1,14 +1,15 @@
-# claude-statusline
+# Claude Status Skill
 
-`claude-statusline` is a small CLI that standardizes custom Claude Code status lines.
+`claude-statusline` is the CLI runtime behind Claude Status Skill, a reusable status system for Claude Code.
 
 It is built around one fact verified against Claude Code `2.1.140`: `statusLine`
 is now an object with `type=command`, and Claude sends the current session payload
-to that command on `stdin`. This tool turns that into a reusable installable CLI
-instead of one-off shell snippets.
+to that command on `stdin`. Claude Status Skill packages that runtime into a reusable,
+installable, skill-friendly workflow instead of one-off shell snippets.
 
 ## Why this repo exists
 
+- Skill-style distribution and story, without putting the runtime on top of an agent layer.
 - macOS-first: install and verify a custom status line with one command.
 - Open-source friendly: runtime logic lives in a standalone CLI, not a local skill.
 - Safer config management: only the `statusLine` block is managed, and backups are kept.
@@ -81,8 +82,8 @@ claude-statusline render --input examples/sample-session.json
 ## Skill wrapper
 
 The repo also includes [skills/claude-statusline/SKILL.md](skills/claude-statusline/SKILL.md).
-That skill is only a wrapper for install/doctor workflows. The runtime itself stays in
-the CLI so regular users do not need an agent environment.
+That skill is the operator-facing shell for Claude Status Skill. The runtime itself stays
+in the CLI so regular users do not need an agent environment.
 
 ## Why CLI instead of skill-only
 
@@ -104,7 +105,7 @@ Why:
 So the current split is deliberate:
 
 - CLI: runtime + install primitives
-- skill: optional operator shell for guided usage
+- skill: product wrapper + guided operator shell
 
 ## Data flow
 

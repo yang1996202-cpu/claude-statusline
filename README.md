@@ -1,0 +1,96 @@
+# claude-statusline
+
+`claude-statusline` is a small CLI that standardizes custom Claude Code status lines.
+
+It is built around one fact verified against Claude Code `2.1.140`: `statusLine`
+is now an object with `type=command`, and Claude sends the current session payload
+to that command on `stdin`. This tool turns that into a reusable installable CLI
+instead of one-off shell snippets.
+
+## Why this repo exists
+
+- macOS-first: install and verify a custom status line with one command.
+- Open-source friendly: runtime logic lives in a standalone CLI, not a local skill.
+- Safer config management: only the `statusLine` block is managed, and backups are kept.
+- Windows-ready shape: command quoting and path handling are abstracted, even though
+  macOS is the primary supported platform in `0.1.0`.
+
+## Current default output
+
+The default renderer prints:
+
+```text
+. | kimi-for-coding | 100%
+```
+
+It comes from three segments:
+
+1. current directory relative to the Claude project root
+2. current model display name
+3. remaining context percentage
+
+## Install
+
+### macOS from a cloned repo
+
+```bash
+./scripts/install.sh
+```
+
+This script will:
+
+1. install the package with `pipx` when available, otherwise `python3 -m pip --user`
+2. run `claude-statusline install`
+3. run `claude-statusline doctor`
+
+### Manual install
+
+```bash
+python3 -m pip install --user .
+claude-statusline install
+claude-statusline doctor
+```
+
+### Windows bootstrap
+
+`./scripts/install.ps1` is included as a starting point. The command abstraction is
+already in the CLI, but Windows support in `0.1.0` is still marked experimental.
+
+## Commands
+
+```bash
+claude-statusline render
+claude-statusline install
+claude-statusline doctor
+claude-statusline uninstall
+```
+
+## Config files
+
+- Claude settings: `~/.claude/settings.json`
+- Tool config: `~/.claude/statusline/config.json`
+- Backups: `~/.claude/statusline/backups/`
+- Install state: `~/.claude/statusline/install-state.json`
+
+## Local preview
+
+```bash
+claude-statusline render --input examples/sample-session.json
+```
+
+## Skill wrapper
+
+The repo also includes [skills/claude-statusline/SKILL.md](skills/claude-statusline/SKILL.md).
+That skill is only a wrapper for install/doctor workflows. The runtime itself stays in
+the CLI so regular users do not need an agent environment.
+
+## Architecture
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Roadmap
+
+- `0.1.x`: macOS-first CLI, safe install and uninstall, Python packaging
+- `0.2.x`: configurable segments and richer doctor output
+- `0.3.x`: Homebrew tap and Windows CI verification
+- `1.0`: stable config schema and release automation

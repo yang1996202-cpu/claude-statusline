@@ -1,0 +1,21 @@
+{
+  "session_id": "demo-session",
+  "cwd": "/Users/demo/work/project",
+  "workspace": {
+    "current_dir": "/Users/demo/work/project",
+    "project_dir": "/Users/demo/work/project",
+    "added_dirs": []
+  },
+  "model": {
+    "id": "claude-sonnet-4-6",
+    "display_name": "claude-sonnet-4-6"
+  },
+  "context_window": {
+    "total_input_tokens": 1200,
+    "total_output_tokens": 430,
+    "context_window_size": 200000,
+    "current_usage": 1630,
+    "used_percentage": 12,
+    "remaining_percentage": 88
+  }
+}

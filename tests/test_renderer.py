@@ -7,7 +7,7 @@ from claude_statusline.cli import DEFAULT_CONFIG, get_claude_dir, load_tool_conf
 
 
 class RenderStatuslineTests(unittest.TestCase):
-    def test_project_root_renders_dot(self) -> None:
+    def test_project_root_renders_project_name(self) -> None:
         payload = {
             "workspace": {
                 "current_dir": "/tmp/demo",
@@ -16,7 +16,7 @@ class RenderStatuslineTests(unittest.TestCase):
             "model": {"display_name": "claude-sonnet-4-6"},
             "context_window": {"remaining_percentage": 88},
         }
-        self.assertEqual(render_statusline(payload, DEFAULT_CONFIG), ". | claude-sonnet-4-6 | 88%")
+        self.assertEqual(render_statusline(payload, DEFAULT_CONFIG), "demo | claude-sonnet-4-6 | ctx 88%")
 
     def test_nested_dir_renders_relative_path(self) -> None:
         payload = {
@@ -27,7 +27,25 @@ class RenderStatuslineTests(unittest.TestCase):
             "model": {"display_name": "kimi-for-coding"},
             "context_window": {"used_percentage": 12},
         }
-        self.assertEqual(render_statusline(payload, DEFAULT_CONFIG), "app/api | kimi-for-coding | 88%")
+        self.assertEqual(render_statusline(payload, DEFAULT_CONFIG), "app/api | kimi-for-coding | ctx 88%")
+
+    def test_project_root_label_override(self) -> None:
+        payload = {
+            "workspace": {
+                "current_dir": "/tmp/demo",
+                "project_dir": "/tmp/demo",
+            },
+            "model": {"display_name": "kimi-for-coding"},
+            "context_window": {"remaining_percentage": 62},
+        }
+        config = {
+            **DEFAULT_CONFIG,
+            "cwd": {
+                **DEFAULT_CONFIG["cwd"],
+                "project_root_label": "root",
+            },
+        }
+        self.assertEqual(render_statusline(payload, config), "root | kimi-for-coding | ctx 62%")
 
     def test_load_tool_config_merges_user_config(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

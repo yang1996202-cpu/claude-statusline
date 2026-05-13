@@ -19,10 +19,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "separator": " | ",
     "segments": ["cwd", "model", "context_remaining"],
     "cwd": {
-        "project_root_label": ".",
         "home_tilde": True,
     },
     "context_remaining": {
+        "label": "ctx",
         "unknown_label": "--%",
         "zero_usage_label": "100%",
     },
@@ -114,6 +114,24 @@ def format_with_home(path: str, enabled: bool) -> str:
     return path
 
 
+def format_with_label(value: str, label: str | None) -> str:
+    if not label:
+        return value
+    return f"{label} {value}"
+
+
+def get_project_root_display(project_dir: str, cwd_config: dict[str, Any]) -> str:
+    custom_label = cwd_config.get("project_root_label")
+    if isinstance(custom_label, str) and custom_label:
+        return custom_label
+
+    project_name = Path(project_dir).name
+    if project_name:
+        return project_name
+
+    return format_with_home(project_dir, cwd_config.get("home_tilde", True))
+
+
 def render_cwd(payload: dict[str, Any], config: dict[str, Any]) -> str:
     cwd_config = config.get("cwd", {})
     workspace = payload.get("workspace") or {}
@@ -126,7 +144,7 @@ def render_cwd(payload: dict[str, Any], config: dict[str, Any]) -> str:
         relative = current_dir
 
     if relative == ".":
-        return cwd_config.get("project_root_label", ".")
+        return get_project_root_display(project_dir, cwd_config)
     if not relative.startswith(".."):
         return relative
     return format_with_home(current_dir, cwd_config.get("home_tilde", True))
@@ -146,24 +164,25 @@ def render_context_remaining(payload: dict[str, Any], config: dict[str, Any]) ->
     context_config = config.get("context_remaining", {})
     context_window = payload.get("context_window") or {}
     remaining = context_window.get("remaining_percentage")
+    label = context_config.get("label")
 
     if remaining is None:
         used = context_window.get("used_percentage")
         if isinstance(used, (int, float)):
             remaining = max(0, 100 - used)
         elif context_window.get("current_usage") in (0, None):
-            return context_config.get("zero_usage_label", "100%")
+            return format_with_label(context_config.get("zero_usage_label", "100%"), label)
 
     if isinstance(remaining, float):
         if remaining.is_integer():
             remaining = int(remaining)
         else:
-            return f"{remaining:.1f}%"
+            return format_with_label(f"{remaining:.1f}%", label)
 
     if isinstance(remaining, int):
-        return f"{remaining}%"
+        return format_with_label(f"{remaining}%", label)
 
-    return context_config.get("unknown_label", "--%")
+    return format_with_label(context_config.get("unknown_label", "--%"), label)
 
 
 def render_statusline(payload: dict[str, Any], config: dict[str, Any]) -> str:

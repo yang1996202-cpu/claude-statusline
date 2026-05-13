@@ -20,14 +20,14 @@ instead of one-off shell snippets.
 The default renderer prints:
 
 ```text
-. | kimi-for-coding | 100%
+project | kimi-for-coding | ctx 100%
 ```
 
 It comes from three segments:
 
-1. current directory relative to the Claude project root
+1. current directory relative to the Claude project root, with the root displayed as the project name
 2. current model display name
-3. remaining context percentage
+3. remaining context percentage, labeled as `ctx`
 
 ## Install
 

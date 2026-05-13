@@ -15,9 +15,17 @@ else
   python3 -m pip install --user "$repo_root"
 fi
 
+user_base="$(python3 -c 'import site; print(site.USER_BASE)')"
+
 if ! command -v claude-statusline >/dev/null 2>&1; then
-  export PATH="$HOME/.local/bin:$HOME/Library/Python/3.9/bin:$HOME/Library/Python/3.10/bin:$HOME/Library/Python/3.11/bin:$HOME/Library/Python/3.12/bin:$HOME/Library/Python/3.13/bin:$PATH"
+  export PATH="$HOME/.local/bin:$user_base/bin:$PATH"
 fi
 
-claude-statusline install
-claude-statusline doctor
+if command -v claude-statusline >/dev/null 2>&1; then
+  cli=(claude-statusline)
+else
+  cli=(python3 -m claude_statusline)
+fi
+
+"${cli[@]}" install
+"${cli[@]}" doctor

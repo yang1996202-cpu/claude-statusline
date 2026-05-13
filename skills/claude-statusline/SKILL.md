@@ -7,6 +7,10 @@ description: Install, diagnose, preview, or remove the claude-statusline CLI whe
 
 This skill wraps the external `claude-statusline` CLI.
 
+The skill is intentionally not the runtime. Claude's `statusLine.command` must point to a local
+command that can run automatically and cheaply on every refresh. The skill exists only for guided
+operations around that CLI.
+
 Use it when the user wants to:
 
 - install a standard Claude Code status line

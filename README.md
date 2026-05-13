@@ -84,6 +84,46 @@ The repo also includes [skills/claude-statusline/SKILL.md](skills/claude-statusl
 That skill is only a wrapper for install/doctor workflows. The runtime itself stays in
 the CLI so regular users do not need an agent environment.
 
+## Why CLI instead of skill-only
+
+This was an intentional product decision.
+
+`statusLine.command` is a hot-path runtime hook. It needs something local, deterministic,
+fast, and scriptable. A skill is useful for guided operations such as install, doctor,
+preview, and uninstall, but it is the wrong dependency for a status line renderer.
+
+Why:
+
+1. Claude executes `statusLine.command` automatically. It expects an executable command,
+   not an agent workflow.
+2. The renderer should run without requiring a chat session, tool call, marketplace,
+   or skill environment.
+3. Human install and AI-assisted install should land on the same runtime path.
+4. A CLI can be tested, versioned, packaged, and distributed in standard ways.
+
+So the current split is deliberate:
+
+- CLI: runtime + install primitives
+- skill: optional operator shell for guided usage
+
+## Data flow
+
+The detailed diagrams live in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), but the
+high-level model is simple: install writes `statusLine.command`, and runtime reads
+Claude's session JSON from `stdin` and turns it into one text line.
+
+## High-value future segments
+
+Model is useful, but it is not the only thing worth showing. The highest-value future
+segments are:
+
+1. `ctx`: remaining context window percentage
+2. `permission`: current permission mode such as `bypass`, `plan`, or `default`
+3. `workspace`: current project or relative working directory
+4. `git`: branch name and possibly dirty state
+5. `mcp`: failing MCP server count
+6. `cost`: running session cost from Claude's session payload
+
 ## Architecture
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

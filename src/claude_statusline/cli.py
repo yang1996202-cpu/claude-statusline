@@ -42,6 +42,29 @@ def get_platform_name() -> str:
     return platform.system().lower()
 
 
+def _configure_utf8_on_windows() -> None:
+    """Reconfigure stdin/stdout to UTF-8 on Windows to handle non-ASCII paths/signatures.
+
+    Claude Code sends the statusline payload as UTF-8 JSON, but Python on Windows
+    defaults to the local ANSI codepage (e.g. cp936) for stdin/stdout. This causes
+    non-ASCII characters (like Chinese usernames or signatures) to be decoded as
+    surrogates, which then triggers a UnicodeEncodeError when printing.
+    """
+    if get_platform_name() != "windows":
+        return
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, OSError):
+        pass
+    try:
+        # Only reopen stdin if its encoding is not already UTF-8.
+        # Double-opening the same fileno causes "Bad file descriptor".
+        if hasattr(sys.stdin, "encoding") and sys.stdin.encoding != "utf-8":
+            sys.stdin = open(sys.stdin.fileno(), encoding="utf-8", closefd=False)
+    except (AttributeError, OSError):
+        pass
+
+
 def get_claude_dir(explicit: str | None = None) -> Path:
     if explicit:
         return Path(explicit).expanduser().resolve()
@@ -406,6 +429,7 @@ def status(args: argparse.Namespace) -> int:
 
 
 def render(args: argparse.Namespace) -> int:
+    _configure_utf8_on_windows()
     claude_dir = get_claude_dir(args.claude_dir)
     config = load_tool_config(claude_dir)
     payload = load_payload(args.input)

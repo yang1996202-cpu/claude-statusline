@@ -8,7 +8,7 @@ The runtime path is:
 
 1. Claude Code executes `statusLine.command`
 2. Claude streams a JSON session payload to `stdin`
-3. `claude-statusline render` reads that payload and prints one line
+3. `staline render` reads that payload and prints one line
 4. Claude displays that line in the status area
 
 ## Data flow
@@ -19,6 +19,7 @@ The runtime path is:
 flowchart LR
 	U[User or AI operator] --> I[install.sh or staline install]
 	I --> P[Install package or console script]
+	I --> K[Resolve CLI ownership and active status line]
 	I --> B[Backup ~/.claude/settings.json]
 	I --> W[Write statusLine.command]
 	I --> C[Write ~/.claude/statusline/config.json]
@@ -57,6 +58,8 @@ The skill still earns its place, just not on the runtime path.
 - It gives an AI operator a stable interface for install, doctor, signature updates, preview, and uninstall.
 - It avoids ad-hoc shell edits to Claude settings.
 - It keeps human setup and AI-assisted setup aligned around the same CLI.
+- Putting it under `.claude/skills/staline/SKILL.md` makes Claude much more likely to discover
+	the right install and signature workflow during real usage.
 
 ## Platform split
 
@@ -70,22 +73,36 @@ Primary target in `0.1.0`.
 
 ### Windows
 
-Planned, partially scaffolded.
+Supported by targeted hardening, but still not as battle-tested as macOS.
 
 - Claude config directory becomes `%USERPROFILE%\\.claude`
 - command rendering uses Windows command line quoting
-- `install.ps1` exists, but Windows needs more verification around PATH and shell execution
+- stdin/stdout are reconfigured to UTF-8 so Claude's JSON payload and non-ASCII signatures survive
+- when the installed executable path contains non-ASCII characters, the managed command falls back
+	to `staline render` or `python -m claude_statusline render` instead of embedding a broken absolute path
+- `install.ps1` exists, but Windows still needs more verification around PATH and shell execution
+
+## Ownership and takeover policy
+
+The install path must distinguish between "a status line exists" and "staline owns the active
+status line".
+
+- `staline status` only reports `installed` when `statusLine.command` clearly points to a staline-managed
+	renderer command, or when it matches the recorded managed command in `install-state.json`
+- if some other status line is active, `staline` treats that as unmanaged and should not auto-overwrite it
+- this matters both for users comparing against Claude's built-in status line and for any future project
+	that copies this packaging pattern
 
 ## Managed files
 
 - `settings.json`: only the `statusLine` block is written
 - `config.json`: renderer preferences
-- `install-state.json`: stores the managed command and latest backup path
+- `install-state.json`: stores the managed command, manager identity, and latest backup path
 - `backups/`: timestamped copies of pre-install settings
 
 ## Good future segments
 
-The current default is `workspace | model | ctx`, but the next segments most worth adding are:
+The current default is `workspace | model | ctx | signature`, but the next segments most worth adding are:
 
 1. `permission`: the current permission mode
 2. `git`: branch name and dirty state

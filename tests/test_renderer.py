@@ -13,6 +13,7 @@ from claude_statusline.cli import (
     PRIMARY_CLI_NAME,
     get_claude_dir,
     get_managed_command,
+    is_managed_renderer_command,
     load_tool_config,
     migrate_user_config_for_install,
     render_statusline,
@@ -22,6 +23,21 @@ from claude_statusline.cli import (
 
 
 class RenderStatuslineTests(unittest.TestCase):
+    def run_status_command(self, claude_dir: Path) -> tuple[int, str]:
+        stdout_buffer = io.StringIO()
+        original_stdout = __import__("sys").stdout
+        try:
+            __import__("sys").stdout = stdout_buffer
+            exit_code = status(
+                argparse.Namespace(
+                    claude_dir=str(claude_dir),
+                )
+            )
+        finally:
+            __import__("sys").stdout = original_stdout
+
+        return exit_code, stdout_buffer.getvalue().strip()
+
     def test_project_root_renders_project_name(self) -> None:
         payload = {
             "workspace": {
@@ -112,20 +128,53 @@ class RenderStatuslineTests(unittest.TestCase):
     def test_status_command_reports_not_installed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             claude_dir = Path(temp_dir)
-            stdout_buffer = io.StringIO()
-            original_stdout = __import__("sys").stdout
-            try:
-                __import__("sys").stdout = stdout_buffer
-                exit_code = status(
-                    argparse.Namespace(
-                        claude_dir=str(claude_dir),
-                    )
-                )
-            finally:
-                __import__("sys").stdout = original_stdout
-
+            exit_code, output = self.run_status_command(claude_dir)
             self.assertEqual(exit_code, 0)
-            self.assertEqual(stdout_buffer.getvalue().strip(), "not_installed")
+            self.assertEqual(output, "not_installed")
+
+    def test_status_command_reports_not_installed_for_unmanaged_statusline(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            claude_dir = Path(temp_dir)
+            settings_path = claude_dir / "settings.json"
+            settings_path.write_text(
+                json.dumps(
+                    {
+                        "statusLine": {
+                            "type": "command",
+                            "command": "statusline-setup render",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            exit_code, output = self.run_status_command(claude_dir)
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(output, "not_installed")
+
+    def test_status_command_reports_installed_for_managed_python_module_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            claude_dir = Path(temp_dir)
+            settings_path = claude_dir / "settings.json"
+            settings_path.write_text(
+                json.dumps(
+                    {
+                        "statusLine": {
+                            "type": "command",
+                            "command": "python -m claude_statusline render",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            exit_code, output = self.run_status_command(claude_dir)
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(output, "installed")
+
+    def test_is_managed_renderer_command_handles_windows_unicode_path(self) -> None:
+        command = '"C:\\Users\\张三\\AppData\\Roaming\\Python\\Scripts\\staline.exe" render'
+        self.assertTrue(is_managed_renderer_command(command))
 
     def test_get_managed_command_prefers_staline_binary(self) -> None:
         with mock.patch("claude_statusline.cli.shutil.which") as mock_which:

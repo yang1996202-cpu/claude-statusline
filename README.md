@@ -7,14 +7,40 @@ is now an object with `type=command`, and Claude sends the current session paylo
 to that command on `stdin`. `staline` packages that runtime into a reusable,
 installable workflow instead of one-off shell snippets.
 
+It also reflects a product decision that turned out to matter in practice: the
+runtime stays in a local CLI, while the guided operator surface lives in Claude's
+own `.claude/skills` discovery path. That split makes install, repair, and signature
+updates much easier to drive from Claude without putting the hot-path renderer behind
+an agent layer.
+
 ## Why this repo exists
 
 - Branded four-segment status line for Claude Code.
 - macOS-first: install and verify a custom status line with one command.
 - Open-source friendly: runtime logic lives in a standalone CLI, not a local skill.
 - Safer config management: only the `statusLine` block is managed, and backups are kept.
-- Windows-ready shape: command quoting and path handling are abstracted, even though
-  macOS is the primary supported platform in `0.1.0`.
+- Claude-discoverable operator shell via `.claude/skills/staline/SKILL.md`.
+- Windows hardening for UTF-8 payloads, Chinese signatures, and non-ASCII user paths.
+- Conservative takeover rules: `staline` only treats its own renderer command as managed,
+  and does not silently overwrite some other active status line.
+
+## Why this matters
+
+This repo is not only about making the status line look better.
+
+It is a small but real product lesson about Claude Code integration:
+
+- the renderer must stay local, deterministic, and cheap because `statusLine.command`
+  is on the hot path
+- the install and mutation surface still needs to be discoverable by Claude, or users
+  will get stuck doing manual shell surgery for things like signature updates
+- Windows cannot be treated as a cosmetic port, because codepages, Chinese home
+  directories, and command quoting can break an otherwise-correct design
+- a third-party status line should not take over a user's existing setup just because
+  `settings.json` happens to contain some `statusLine`
+
+The result is a more durable pattern: CLI for runtime, `.claude` skill for guided
+operations, and explicit ownership checks before mutating user config.
 
 ## Current default output
 
@@ -58,7 +84,15 @@ staline doctor
 ### Windows bootstrap
 
 `./scripts/install.ps1` is included as a starting point. The command abstraction is
-already in the CLI, but Windows support in `0.1.0` is still marked experimental.
+already in the CLI. Recent Windows hardening focused on the ugly cases that break
+real usage:
+
+- UTF-8 stdin/stdout handling so Claude's JSON payload and Chinese signatures do not corrupt
+- non-ASCII executable-path fallback so Chinese usernames do not break `statusLine.command`
+- skill discovery from `.claude/skills` so Claude can guide install and signature changes
+
+Windows is still marked experimental in `0.1.0`, but it is no longer treated as a
+hand-wavy future concern.
 
 ## Commands
 
@@ -86,9 +120,10 @@ staline render --input examples/sample-session.json
 
 ## Skill wrapper
 
-The repo also includes [skills/staline/SKILL.md](skills/staline/SKILL.md).
-That skill is the operator-facing shell for `staline`. The runtime itself stays
-in the CLI so regular users do not need an agent environment.
+The repo also includes [.claude/skills/staline/SKILL.md](.claude/skills/staline/SKILL.md).
+That skill is the operator-facing shell for `staline`, placed where Claude can actually
+discover it during assisted setup and signature edits. The runtime itself stays in the
+CLI so regular users do not need an agent environment.
 
 ## Why CLI instead of skill-only
 
@@ -110,7 +145,23 @@ Why:
 So the current split is deliberate:
 
 - CLI: runtime + install primitives, exposed as `staline`
-- skill: product wrapper + guided operator shell
+- skill: Claude-discoverable product wrapper + guided operator shell
+
+## Ownership model
+
+`staline` now draws a hard line between "some status line exists" and "this status line
+belongs to staline".
+
+It only treats the install as managed when `statusLine.command` clearly points to one of
+its renderer forms, such as:
+
+- `staline render`
+- `claude-statusline render`
+- `python -m claude_statusline render`
+
+If some other status line is active, `staline` should not silently replace it. That rule
+matters for users who want to compare with Claude's built-in status line, and it matters
+even more if this packaging pattern gets copied into other projects.
 
 ## Data flow
 
@@ -136,7 +187,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Roadmap
 
-- `0.1.x`: macOS-first CLI, safe install and uninstall, Python packaging
+- `0.1.x`: macOS-first CLI, safe install and uninstall, Python packaging, Windows hardening
 - `0.2.x`: configurable segments and richer doctor output
-- `0.3.x`: Homebrew tap and Windows CI verification
+- `0.3.x`: Homebrew tap and broader Windows CI verification
 - `1.0`: stable config schema and release automation

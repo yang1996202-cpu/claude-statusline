@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -152,6 +153,93 @@ def get_managed_command() -> str:
     if get_platform_name() == "windows" and _path_has_non_ascii(sys.executable):
         return quote_command(["python", "-m", "claude_statusline", "render"])
     return quote_command([sys.executable, "-m", "claude_statusline", "render"])
+
+
+def _strip_shell_quotes(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
+    return value
+
+
+def _split_command_tokens(command: str) -> list[list[str]]:
+    parsed_token_sets: list[list[str]] = []
+    seen: set[tuple[str, ...]] = set()
+
+    for posix in (True, False):
+        try:
+            tokens = shlex.split(command, posix=posix)
+        except ValueError:
+            continue
+
+        normalized = tuple(_strip_shell_quotes(token) for token in tokens if token)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            parsed_token_sets.append(list(normalized))
+
+    if parsed_token_sets:
+        return parsed_token_sets
+
+    fallback = tuple(part for part in re.split(r"\s+", command.strip()) if part)
+    return [list(fallback)] if fallback else []
+
+
+def _command_basename(command_part: str) -> str:
+    normalized = _strip_shell_quotes(command_part).replace("\\", "/")
+    return normalized.rsplit("/", 1)[-1].lower()
+
+
+def is_managed_renderer_command(command: Any) -> bool:
+    if not isinstance(command, str):
+        return False
+
+    for tokens in _split_command_tokens(command):
+        if len(tokens) >= 2:
+            executable_name = _command_basename(tokens[0])
+            if executable_name in {
+                PRIMARY_CLI_NAME,
+                f"{PRIMARY_CLI_NAME}.exe",
+                LEGACY_CLI_NAME,
+                f"{LEGACY_CLI_NAME}.exe",
+            } and tokens[1].lower() == "render":
+                return True
+
+        lowered_tokens = [token.lower() for token in tokens]
+        for index in range(len(lowered_tokens) - 2):
+            if (
+                lowered_tokens[index] == "-m"
+                and lowered_tokens[index + 1] == "claude_statusline"
+                and lowered_tokens[index + 2] == "render"
+            ):
+                return True
+
+    return False
+
+
+def get_statusline_command(status_line: Any) -> str | None:
+    if not isinstance(status_line, dict):
+        return None
+
+    if status_line.get("type") != "command":
+        return None
+
+    command = status_line.get("command")
+    if not isinstance(command, str):
+        return None
+
+    normalized = command.strip()
+    return normalized or None
+
+
+def is_managed_statusline(status_line: Any, state: dict[str, Any] | None = None) -> bool:
+    command = get_statusline_command(status_line)
+    if not command:
+        return False
+
+    managed_command = state.get("managed_command") if isinstance(state, dict) else None
+    if isinstance(managed_command, str) and command == managed_command:
+        return True
+
+    return is_managed_renderer_command(command)
 
 
 def format_with_home(path: str, enabled: bool) -> str:
@@ -334,6 +422,7 @@ def install(args: argparse.Namespace) -> int:
         state_path,
         {
             "installed_at": datetime.now(timezone.utc).isoformat(),
+            "managed_by": PRIMARY_CLI_NAME,
             "managed_command": command,
             "backup_path": str(backup_path) if backup_path else None,
             "platform": get_platform_name(),
@@ -361,8 +450,8 @@ def uninstall(args: argparse.Namespace) -> int:
         print("no managed statusLine found")
         return 0
 
-    if not args.force and status_line.get("command") != managed_command:
-        print("refusing to remove statusLine because it no longer matches the recorded managed command")
+    if not args.force and not is_managed_statusline(status_line, state):
+        print("refusing to remove statusLine because it is not managed by staline")
         print("rerun with --force if you want to remove it anyway")
         return 1
 
@@ -383,6 +472,7 @@ def doctor(args: argparse.Namespace) -> int:
     state = read_json_file(state_path, default={})
     status_line = settings.get("statusLine")
     managed_command = state.get("managed_command")
+    statusline_command = get_statusline_command(status_line)
 
     messages: list[tuple[str, str]] = []
     messages.append(("ok", f"platform: {get_platform_name()}"))
@@ -403,16 +493,19 @@ def doctor(args: argparse.Namespace) -> int:
         messages.append(("warn", "statusLine is not configured as an object"))
     elif status_line.get("type") != "command":
         messages.append(("fail", f"statusLine.type must be 'command', got {status_line.get('type')!r}"))
-    elif not isinstance(status_line.get("command"), str):
+    elif statusline_command is None:
         messages.append(("fail", "statusLine.command is missing or not a string"))
     else:
-        messages.append(("ok", f"statusLine command: {status_line['command']}"))
-        if managed_command and managed_command == status_line.get("command"):
+        messages.append(("ok", f"statusLine command: {statusline_command}"))
+        if managed_command and managed_command == statusline_command:
             messages.append(("ok", "statusLine matches the recorded managed command"))
-        elif managed_command:
-            messages.append(("warn", "statusLine differs from the recorded managed command"))
+        elif is_managed_statusline(status_line, state):
+            if managed_command:
+                messages.append(("warn", "statusLine is managed by staline but differs from the recorded managed command"))
+            else:
+                messages.append(("warn", "statusLine looks managed by staline but install-state.json is missing or incomplete"))
         else:
-            messages.append(("warn", "install-state.json missing or incomplete"))
+            messages.append(("warn", "statusLine is configured but not managed by staline"))
 
     for level, message in messages:
         print(f"[{level}] {message}")
@@ -423,18 +516,12 @@ def doctor(args: argparse.Namespace) -> int:
 def status(args: argparse.Namespace) -> int:
     claude_dir = get_claude_dir(args.claude_dir)
     settings_path = get_settings_path(claude_dir)
+    state_path = get_state_path(claude_dir)
     settings = read_json_file(settings_path, default={})
+    state = read_json_file(state_path, default={})
     status_line = settings.get("statusLine")
 
-    if not isinstance(status_line, dict):
-        print("not_installed")
-        return 0
-
-    if status_line.get("type") != "command":
-        print("not_installed")
-        return 0
-
-    if not isinstance(status_line.get("command"), str):
+    if not is_managed_statusline(status_line, state):
         print("not_installed")
         return 0
 

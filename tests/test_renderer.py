@@ -1,9 +1,20 @@
+import argparse
 import json
+import io
 import tempfile
 import unittest
 from pathlib import Path
 
-from claude_statusline.cli import DEFAULT_CONFIG, get_claude_dir, load_tool_config, render_statusline
+from claude_statusline.cli import (
+    DEFAULT_CONFIG,
+    DEFAULT_SIGNATURE_TEXT,
+    get_claude_dir,
+    load_tool_config,
+    migrate_user_config_for_install,
+    render_statusline,
+    signature,
+    status,
+)
 
 
 class RenderStatuslineTests(unittest.TestCase):
@@ -16,7 +27,7 @@ class RenderStatuslineTests(unittest.TestCase):
             "model": {"display_name": "claude-sonnet-4-6"},
             "context_window": {"remaining_percentage": 88},
         }
-        self.assertEqual(render_statusline(payload, DEFAULT_CONFIG), "demo | claude-sonnet-4-6 | ctx 88%")
+        self.assertEqual(render_statusline(payload, DEFAULT_CONFIG), f"demo | claude-sonnet-4-6 | ctx 88% | {DEFAULT_SIGNATURE_TEXT}")
 
     def test_nested_dir_renders_relative_path(self) -> None:
         payload = {
@@ -27,7 +38,7 @@ class RenderStatuslineTests(unittest.TestCase):
             "model": {"display_name": "kimi-for-coding"},
             "context_window": {"used_percentage": 12},
         }
-        self.assertEqual(render_statusline(payload, DEFAULT_CONFIG), "app/api | kimi-for-coding | ctx 88%")
+        self.assertEqual(render_statusline(payload, DEFAULT_CONFIG), f"app/api | kimi-for-coding | ctx 88% | {DEFAULT_SIGNATURE_TEXT}")
 
     def test_project_root_label_override(self) -> None:
         payload = {
@@ -45,7 +56,7 @@ class RenderStatuslineTests(unittest.TestCase):
                 "project_root_label": "root",
             },
         }
-        self.assertEqual(render_statusline(payload, config), "root | kimi-for-coding | ctx 62%")
+        self.assertEqual(render_statusline(payload, config), f"root | kimi-for-coding | ctx 62% | {DEFAULT_SIGNATURE_TEXT}")
 
     def test_load_tool_config_merges_user_config(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -59,6 +70,58 @@ class RenderStatuslineTests(unittest.TestCase):
 
     def test_get_claude_dir_override(self) -> None:
         self.assertTrue(str(get_claude_dir("~/tmp")).endswith("tmp"))
+
+    def test_empty_signature_hides_fourth_segment(self) -> None:
+        payload = {
+            "workspace": {
+                "current_dir": "/tmp/demo",
+                "project_dir": "/tmp/demo",
+            },
+            "model": {"display_name": "kimi-for-coding"},
+            "context_window": {"remaining_percentage": 88},
+        }
+        config = {
+            **DEFAULT_CONFIG,
+            "signature": {
+                "text": "",
+            },
+        }
+        self.assertEqual(render_statusline(payload, config), "demo | kimi-for-coding | ctx 88%")
+
+    def test_install_migration_backfills_default_signature(self) -> None:
+        migrated = migrate_user_config_for_install({"segments": ["cwd", "model", "context_remaining"]})
+        self.assertEqual(migrated["signature"]["text"], DEFAULT_SIGNATURE_TEXT)
+        self.assertIn("signature", migrated["segments"])
+
+    def test_signature_command_clears_signature_text(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            claude_dir = Path(temp_dir)
+            signature(
+                argparse.Namespace(
+                    claude_dir=str(claude_dir),
+                    text="",
+                )
+            )
+            config = load_tool_config(claude_dir)
+            self.assertEqual(config["signature"]["text"], "")
+
+    def test_status_command_reports_not_installed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            claude_dir = Path(temp_dir)
+            stdout_buffer = io.StringIO()
+            original_stdout = __import__("sys").stdout
+            try:
+                __import__("sys").stdout = stdout_buffer
+                exit_code = status(
+                    argparse.Namespace(
+                        claude_dir=str(claude_dir),
+                    )
+                )
+            finally:
+                __import__("sys").stdout = original_stdout
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(stdout_buffer.getvalue().strip(), "not_installed")
 
 
 if __name__ == "__main__":

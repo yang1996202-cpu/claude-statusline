@@ -15,9 +15,13 @@ from typing import Any
 from claude_statusline import __version__
 
 
+DEFAULT_SIGNATURE_TEXT = "二哥的认知进化论"
+SIGNATURE_SEGMENT = "signature"
+
+
 DEFAULT_CONFIG: dict[str, Any] = {
     "separator": " | ",
-    "segments": ["cwd", "model", "context_remaining"],
+    "segments": ["cwd", "model", "context_remaining", SIGNATURE_SEGMENT],
     "cwd": {
         "home_tilde": True,
     },
@@ -25,6 +29,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "label": "ctx",
         "unknown_label": "--%",
         "zero_usage_label": "100%",
+    },
+    "signature": {
+        "text": DEFAULT_SIGNATURE_TEXT,
     },
 }
 
@@ -85,8 +92,13 @@ def deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_tool_config(claude_dir: Path) -> dict[str, Any]:
-    user_config = read_json_file(get_config_path(claude_dir), default={})
+    user_config = load_user_config(claude_dir)
     return deep_merge(DEFAULT_CONFIG, user_config)
+
+
+def load_user_config(claude_dir: Path) -> dict[str, Any]:
+    user_config = read_json_file(get_config_path(claude_dir), default={})
+    return user_config if isinstance(user_config, dict) else {}
 
 
 def quote_command(parts: list[str]) -> str:
@@ -118,6 +130,12 @@ def format_with_label(value: str, label: str | None) -> str:
     if not label:
         return value
     return f"{label} {value}"
+
+
+def normalize_signature_text(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip()
 
 
 def get_project_root_display(project_dir: str, cwd_config: dict[str, Any]) -> str:
@@ -185,11 +203,40 @@ def render_context_remaining(payload: dict[str, Any], config: dict[str, Any]) ->
     return format_with_label(context_config.get("unknown_label", "--%"), label)
 
 
+def render_signature(config: dict[str, Any]) -> str:
+    signature_config = config.get("signature") or {}
+    return normalize_signature_text(signature_config.get("text"))
+
+
+def update_signature_config(config: dict[str, Any], text: str) -> dict[str, Any]:
+    updated = deep_merge(DEFAULT_CONFIG, config)
+    normalized_text = normalize_signature_text(text)
+    signature_config = updated.get("signature") or {}
+    signature_config["text"] = normalized_text
+    updated["signature"] = signature_config
+
+    segments = updated.get("segments")
+    if not isinstance(segments, list):
+        segments = list(DEFAULT_CONFIG["segments"])
+    if normalized_text and SIGNATURE_SEGMENT not in segments:
+        segments = [*segments, SIGNATURE_SEGMENT]
+    updated["segments"] = segments
+    return updated
+
+
+def migrate_user_config_for_install(config: dict[str, Any]) -> dict[str, Any]:
+    signature_config = config.get("signature")
+    if isinstance(signature_config, dict):
+        return update_signature_config(config, signature_config.get("text", ""))
+    return update_signature_config(config, DEFAULT_SIGNATURE_TEXT)
+
+
 def render_statusline(payload: dict[str, Any], config: dict[str, Any]) -> str:
     segment_renderers = {
         "cwd": lambda: render_cwd(payload, config),
         "model": lambda: render_model(payload),
         "context_remaining": lambda: render_context_remaining(payload, config),
+        SIGNATURE_SEGMENT: lambda: render_signature(config),
     }
 
     rendered: list[str] = []
@@ -232,8 +279,8 @@ def install(args: argparse.Namespace) -> int:
     backup_dir = get_backup_dir(claude_dir)
 
     statusline_dir.mkdir(parents=True, exist_ok=True)
-    if not config_path.exists():
-        write_json_file(config_path, DEFAULT_CONFIG)
+    user_config = load_user_config(claude_dir)
+    write_json_file(config_path, migrate_user_config_for_install(user_config))
 
     settings = read_json_file(settings_path, default={})
     backup_path = backup_settings(settings_path, backup_dir)
@@ -333,11 +380,57 @@ def doctor(args: argparse.Namespace) -> int:
     return 0 if not any(level == "fail" for level, _ in messages) else 1
 
 
+def status(args: argparse.Namespace) -> int:
+    claude_dir = get_claude_dir(args.claude_dir)
+    settings_path = get_settings_path(claude_dir)
+    settings = read_json_file(settings_path, default={})
+    status_line = settings.get("statusLine")
+
+    if not isinstance(status_line, dict):
+        print("not_installed")
+        return 0
+
+    if status_line.get("type") != "command":
+        print("not_installed")
+        return 0
+
+    if not isinstance(status_line.get("command"), str):
+        print("not_installed")
+        return 0
+
+    print("installed")
+    return 0
+
+
 def render(args: argparse.Namespace) -> int:
     claude_dir = get_claude_dir(args.claude_dir)
     config = load_tool_config(claude_dir)
     payload = load_payload(args.input)
     print(render_statusline(payload, config))
+    return 0
+
+
+def signature(args: argparse.Namespace) -> int:
+    claude_dir = get_claude_dir(args.claude_dir)
+    config_path = get_config_path(claude_dir)
+    user_config = load_user_config(claude_dir)
+
+    if args.text is None:
+        current_text = normalize_signature_text((user_config.get("signature") or {}).get("text"))
+        if current_text:
+            print(current_text)
+        else:
+            print("signature disabled")
+        return 0
+
+    updated_config = update_signature_config(user_config, args.text)
+    write_json_file(config_path, updated_config)
+
+    current_text = normalize_signature_text(args.text)
+    if current_text:
+        print(f"signature set: {current_text}")
+    else:
+        print("signature cleared")
     return 0
 
 
@@ -356,6 +449,11 @@ def build_parser() -> argparse.ArgumentParser:
     install_parser.add_argument("--command", help="Override the managed command written to statusLine.command")
     install_parser.set_defaults(func=install)
 
+    signature_parser = subparsers.add_parser("signature", help="Read or update the rightmost signature segment")
+    signature_parser.add_argument("text", nargs="?", help="Set the signature text. Use an empty string to clear it")
+    signature_parser.add_argument("--claude-dir", help="Override the Claude config directory")
+    signature_parser.set_defaults(func=signature)
+
     uninstall_parser = subparsers.add_parser("uninstall", help="Remove the managed statusLine from Claude settings")
     uninstall_parser.add_argument("--claude-dir", help="Override the Claude config directory")
     uninstall_parser.add_argument("--force", action="store_true", help="Remove statusLine even if it no longer matches the recorded command")
@@ -364,6 +462,10 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser = subparsers.add_parser("doctor", help="Inspect the current installation and Claude settings")
     doctor_parser.add_argument("--claude-dir", help="Override the Claude config directory")
     doctor_parser.set_defaults(func=doctor)
+
+    status_parser = subparsers.add_parser("status", help="Print whether the managed status line is installed")
+    status_parser.add_argument("--claude-dir", help="Override the Claude config directory")
+    status_parser.set_defaults(func=status)
 
     return parser
 

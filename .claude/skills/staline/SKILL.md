@@ -24,7 +24,14 @@ Use it when the user wants to:
 ## Rules
 
 1. Keep the user-facing surface to two actions only: modify signature or uninstall.
-2. If the status line is missing or stale, run `staline install` internally instead of asking the user to do it.
+2. **Detection & installation flow** (run in this order):
+   a. Try `staline status` then `claude-statusline status`.
+   b. If the CLI is not found, read `~/.claude/settings.json` and check for a `statusLine` object with `type: "command"`.
+   c. If either the CLI reports "installed" **or** `settings.json` already contains a `statusLine`, treat it as **installed**.
+      - If the CLI is missing but settings show installed, install the CLI package (`pip install -e .` in the project root) instead of re-running `staline install`, to avoid overwriting existing settings.
+   d. Only if **both** the CLI is missing **and** `settings.json` has no `statusLine`, the user needs a fresh install.
+      - First run `pip install -e .` in the project root to make the CLI available.
+      - Then run `staline install`.
 3. For signature changes, use `staline signature <text>` and use an empty string to clear it.
 4. Do not expose `install`, `render`, or `doctor` unless the user explicitly asks for technical details.
 5. Treat Windows as experimental unless the user explicitly wants to test it.

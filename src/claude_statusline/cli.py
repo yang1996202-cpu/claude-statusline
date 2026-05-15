@@ -132,11 +132,25 @@ def quote_command(parts: list[str]) -> str:
     return shlex.join(parts)
 
 
+def _path_has_non_ascii(path: str) -> bool:
+    return any(ord(ch) > 127 for ch in path)
+
+
 def get_managed_command() -> str:
     for command_name in (PRIMARY_CLI_NAME, LEGACY_CLI_NAME):
         executable = shutil.which(command_name)
         if executable:
+            # On Windows, if the absolute path contains non-ASCII characters
+            # (e.g. Chinese username), fall back to the short command name.
+            # Claude Code writes settings.json as UTF-8, but cmd.exe decodes
+            # the command string using the system codepage (cp936/GBK), which
+            # corrupts the path and causes the executable to not be found.
+            if get_platform_name() == "windows" and _path_has_non_ascii(executable):
+                return quote_command([command_name, "render"])
             return quote_command([executable, "render"])
+    # Fallback: python -m claude_statusline render
+    if get_platform_name() == "windows" and _path_has_non_ascii(sys.executable):
+        return quote_command(["python", "-m", "claude_statusline", "render"])
     return quote_command([sys.executable, "-m", "claude_statusline", "render"])
 
 

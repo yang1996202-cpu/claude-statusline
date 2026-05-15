@@ -17,12 +17,12 @@ The runtime path is:
 
 ```mermaid
 flowchart LR
-	U[User or AI operator] --> I[install.sh or claude-statusline install]
+	U[User or AI operator] --> I[install.sh or staline install]
 	I --> P[Install package or console script]
 	I --> B[Backup ~/.claude/settings.json]
 	I --> W[Write statusLine.command]
 	I --> C[Write ~/.claude/statusline/config.json]
-	I --> D[Run claude-statusline doctor]
+	I --> D[Run staline doctor]
 ```
 
 ### Runtime flow
@@ -32,7 +32,7 @@ flowchart LR
 	A[Claude Code] --> S[Read ~/.claude/settings.json]
 	S --> X[Execute statusLine.command]
 	A --> J[Stream session JSON to stdin]
-	J --> R[claude-statusline render]
+	J --> R[staline render]
 	C[~/.claude/statusline/config.json] --> R
 	R --> O[Render one status line string]
 	O --> A
@@ -54,7 +54,7 @@ So the core is a CLI, and the skill is only an operator shell.
 
 The skill still earns its place, just not on the runtime path.
 
-- It gives an AI operator a stable interface for install, doctor, preview, and uninstall.
+- It gives an AI operator a stable interface for install, doctor, signature updates, preview, and uninstall.
 - It avoids ad-hoc shell edits to Claude settings.
 - It keeps human setup and AI-assisted setup aligned around the same CLI.
 

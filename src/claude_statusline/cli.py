@@ -15,6 +15,8 @@ from typing import Any
 from claude_statusline import __version__
 
 
+PRIMARY_CLI_NAME = "staline"
+LEGACY_CLI_NAME = "claude-statusline"
 DEFAULT_SIGNATURE_TEXT = "二哥的认知进化论"
 SIGNATURE_SEGMENT = "signature"
 
@@ -108,9 +110,10 @@ def quote_command(parts: list[str]) -> str:
 
 
 def get_managed_command() -> str:
-    executable = shutil.which("claude-statusline")
-    if executable:
-        return quote_command([executable, "render"])
+    for command_name in (PRIMARY_CLI_NAME, LEGACY_CLI_NAME):
+        executable = shutil.which(command_name)
+        if executable:
+            return quote_command([executable, "render"])
     return quote_command([sys.executable, "-m", "claude_statusline", "render"])
 
 
@@ -435,7 +438,7 @@ def signature(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="claude-statusline")
+    parser = argparse.ArgumentParser(prog=PRIMARY_CLI_NAME)
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

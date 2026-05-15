@@ -1,15 +1,15 @@
-# Claude Status Skill
+# staline
 
-`claude-statusline` is the CLI runtime behind Claude Status Skill, a reusable status system for Claude Code.
+`staline` is the branded status line CLI for Claude Code.
 
 It is built around one fact verified against Claude Code `2.1.140`: `statusLine`
 is now an object with `type=command`, and Claude sends the current session payload
-to that command on `stdin`. Claude Status Skill packages that runtime into a reusable,
-installable, skill-friendly workflow instead of one-off shell snippets.
+to that command on `stdin`. `staline` packages that runtime into a reusable,
+installable workflow instead of one-off shell snippets.
 
 ## Why this repo exists
 
-- Skill-style distribution and story, without putting the runtime on top of an agent layer.
+- Branded four-segment status line for Claude Code.
 - macOS-first: install and verify a custom status line with one command.
 - Open-source friendly: runtime logic lives in a standalone CLI, not a local skill.
 - Safer config management: only the `statusLine` block is managed, and backups are kept.
@@ -21,14 +21,15 @@ installable, skill-friendly workflow instead of one-off shell snippets.
 The default renderer prints:
 
 ```text
-project | kimi-for-coding | ctx 100%
+project | kimi-for-coding | ctx 100% | 二哥的认知进化论
 ```
 
-It comes from three segments:
+It comes from four segments:
 
 1. current directory relative to the Claude project root, with the root displayed as the project name
 2. current model display name
 3. remaining context percentage, labeled as `ctx`
+4. rightmost signature text, defaulting to `二哥的认知进化论`
 
 ## Install
 
@@ -41,16 +42,18 @@ It comes from three segments:
 This script will:
 
 1. install the package with `pipx` when available, otherwise `python3 -m pip --user`
-2. run `claude-statusline install`
-3. run `claude-statusline doctor`
+2. run `staline install`
+3. run `staline doctor`
 
 ### Manual install
 
 ```bash
 python3 -m pip install --user .
-claude-statusline install
-claude-statusline doctor
+staline install
+staline doctor
 ```
+
+`claude-statusline` remains available as a compatibility alias for existing installs and scripts.
 
 ### Windows bootstrap
 
@@ -60,10 +63,12 @@ already in the CLI, but Windows support in `0.1.0` is still marked experimental.
 ## Commands
 
 ```bash
-claude-statusline render
-claude-statusline install
-claude-statusline doctor
-claude-statusline uninstall
+staline render
+staline install
+staline doctor
+staline signature "二哥的认知进化论"
+staline signature ""
+staline uninstall
 ```
 
 ## Config files
@@ -76,13 +81,13 @@ claude-statusline uninstall
 ## Local preview
 
 ```bash
-claude-statusline render --input examples/sample-session.json
+staline render --input examples/sample-session.json
 ```
 
 ## Skill wrapper
 
-The repo also includes [skills/claude-statusline/SKILL.md](skills/claude-statusline/SKILL.md).
-That skill is the operator-facing shell for Claude Status Skill. The runtime itself stays
+The repo also includes [skills/staline/SKILL.md](skills/staline/SKILL.md).
+That skill is the operator-facing shell for `staline`. The runtime itself stays
 in the CLI so regular users do not need an agent environment.
 
 ## Why CLI instead of skill-only
@@ -104,7 +109,7 @@ Why:
 
 So the current split is deliberate:
 
-- CLI: runtime + install primitives
+- CLI: runtime + install primitives, exposed as `staline`
 - skill: product wrapper + guided operator shell
 
 ## Data flow

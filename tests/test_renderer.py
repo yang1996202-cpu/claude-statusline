@@ -4,11 +4,15 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from claude_statusline.cli import (
     DEFAULT_CONFIG,
     DEFAULT_SIGNATURE_TEXT,
+    LEGACY_CLI_NAME,
+    PRIMARY_CLI_NAME,
     get_claude_dir,
+    get_managed_command,
     load_tool_config,
     migrate_user_config_for_install,
     render_statusline,
@@ -122,6 +126,16 @@ class RenderStatuslineTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             self.assertEqual(stdout_buffer.getvalue().strip(), "not_installed")
+
+    def test_get_managed_command_prefers_staline_binary(self) -> None:
+        with mock.patch("claude_statusline.cli.shutil.which") as mock_which:
+            mock_which.side_effect = lambda name: "/tmp/staline" if name == PRIMARY_CLI_NAME else None
+            self.assertEqual(get_managed_command(), "/tmp/staline render")
+
+    def test_get_managed_command_falls_back_to_legacy_binary(self) -> None:
+        with mock.patch("claude_statusline.cli.shutil.which") as mock_which:
+            mock_which.side_effect = lambda name: "/tmp/claude-statusline" if name == LEGACY_CLI_NAME else None
+            self.assertEqual(get_managed_command(), "/tmp/claude-statusline render")
 
 
 if __name__ == "__main__":

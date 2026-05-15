@@ -3,16 +3,16 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "claude-statusline"
+name = "staline"
 version = "0.1.0"
-description = "Claude Status Skill: a CLI-powered status system for Claude Code"
+description = "Staline: branded status line CLI for Claude Code"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
 authors = [
   { name = "Yang" }
 ]
-keywords = ["claude", "claude-code", "statusline", "skill", "cli", "macos"]
+keywords = ["staline", "claude", "claude-code", "statusline", "cli", "macos"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -30,6 +30,7 @@ Homepage = "https://github.com/yang1996202-cpu/claude-statusline"
 Issues = "https://github.com/yang1996202-cpu/claude-statusline/issues"
 
 [project.scripts]
+staline = "claude_statusline.cli:main"
 claude-statusline = "claude_statusline.cli:main"
 
 [tool.setuptools]
